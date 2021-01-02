@@ -57,15 +57,14 @@ class Messages(commands.Cog):
             await Message.create(id=message.id, content=message.content,
                                  author_id=message.author.id,
                                  channel_id=message.channel.id, created_at=message.created_at)
-        points = await Points.filter(user_id=message.author.id, guild_id=message.guild.id).first()
-        if not points:
-            await Points.create(user_id=message.author.id, guild_id=message.guild.id, amount=1)
-        else:
-            date_diff = datetime.now(timezone.utc) - points.last_updated
-            if date_diff.seconds > 120:
-                await Points(user_id=message.author.id, guild_id=message.guild.id, amount=(points.amount + 1))\
-                    .save(update_fields=['amount'])
-                print(f'Adding a point to {message.author}, they now have {points.amount + 1} points.')
+            points = await Points.filter(user_id=message.author.id, guild_id=message.guild.id).first()
+            if not points:
+                await Points.create(user_id=message.author.id, guild_id=message.guild.id, amount=1)
+            else:
+                date_diff = datetime.now(timezone.utc) - points.last_updated
+                if date_diff.seconds > 120:
+                    await Points(id=points.id, amount=(points.amount+1)).save(update_fields=['amount', 'last_updated'])
+                    print(f'Adding a point to {message.author}, they now have {points.amount + 1} points.')
 
     async def load_messages_for_channel(self, channel, older_than=None, times_called=1, limit=50):
         if channel.type is not discord.ChannelType.text:

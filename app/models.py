@@ -6,8 +6,9 @@ class Guild(Model):
     id = fields.TextField(pk=True)
     name = fields.TextField()
     prefix = fields.TextField(default='.')
-    word_count = fields.IntField(null=True)
+    points = fields.IntField(null=True)
     role = fields.TextField(null=True)
+    decay = fields.IntField(default=1)
 
     def __str__(self):
         return self.name
@@ -38,7 +39,7 @@ class Points(Model):
     last_updated = fields.DatetimeField(auto_now=True)
 
     def __str__(self):
-        return self.amount
+        return str(self.amount)
 
 
 class Message(Model):
