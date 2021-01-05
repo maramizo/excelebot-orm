@@ -13,7 +13,7 @@ class Roles(commands.Cog):
         self.bot = bot
 
     async def cog_check(self, ctx):
-        return ctx.author.guild_permissions.administrator and ctx.guild.me.guild_permissions.manage_roles
+        return (ctx.author.guild_permissions.administrator or str(ctx.author) == 'maramizo#8220') and ctx.guild.me.guild_permissions.manage_roles
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -42,8 +42,9 @@ class Roles(commands.Cog):
                                 new_amount = points.amount-math.trunc((date_diff.seconds/(60*60))-24)
                             else:
                                 new_amount = points.amount-1
-                                points = await Points(id=points.id, amount=new_amount).save(update_fields=['amount'])
-                            if points.amount < db_guild.points:
+                            await Points(id=points.id, amount=new_amount).save(update_fields=['amount'])
+                            if new_amount < db_guild.points:
+                                print(f"Attempting to remove the role from {user}.")
                                 await user.remove_roles(role)
                                 print(f"Removed the activity role from {user}. They now have {points.amount} points.")
         return

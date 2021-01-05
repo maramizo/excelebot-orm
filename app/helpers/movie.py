@@ -1,7 +1,17 @@
+import json
 import textwrap
 import aiohttp
 import discord
+from bs4 import BeautifulSoup
 from async_class import AsyncClass
+import re
+
+MOVIES_BASE = 'https://lookmovie.ag/movies/search/?q='
+BASE = 'https://lookmovie.ag'
+
+
+def find(string, start, end):
+    return string.split(start)[1].split(end)[0]
 
 
 class MovieList(AsyncClass):
@@ -10,17 +20,36 @@ class MovieList(AsyncClass):
     async def __ainit__(self, name):
         self.name = name
         self.quality = 'All'
-        self.movies = {}
+        self.movies = []
         self.index = 0
         await self.load_movies()
 
     async def load_movies(self):
         async with aiohttp.ClientSession() as session:
-            async with session.get(self.endpoint, params={'query_term': self.name, 'quality': self.quality, 'limit': 50,
-                                                          'sort_by': 'seeds', 'with_rt_ratings': 'true'}) as res:
-                res = await res.json()
-                if res['data']['movie_count'] > 0:
-                    self.movies = res['data']['movies']
+            async with session.get(f'{MOVIES_BASE}{self.name}') as response:
+
+                print("Status:", response.status)
+                print("Content-type:", response.headers['content-type'])
+
+                response = await response.text()
+                soup = BeautifulSoup(response, 'html.parser')
+                result = dict()
+                for element in soup.find_all('div', 'movie-item-style-2 movie-item-style-1'):
+                    info = element.find('h6')
+                    year = element.find('p', 'year').string
+                    img = element.find('img', 'lozad')
+                    rate = element.find('p', 'rate').find('span').string
+                    if img:
+                        img = f"https://lookmovie.ag{img['data-src']}"
+
+                    link = f"{BASE}{info.a.get('href')}"
+
+                    title = info.a.string.strip()
+                    title = re.sub(r'[<>:"/|?*\\]', ' ', title)  # Remove invalid characters for Windows
+                    title = ' '.join(title.split())  # Remove consecutive spaces
+
+                    movie = {'title': title, 'year': year, 'img': img, 'rate': rate, 'link': link}
+                    self.movies.append(movie)
         return
 
     def get(self):
@@ -31,30 +60,42 @@ class MovieList(AsyncClass):
             self.index += 1
 
     def prev(self):
-        if self.index > 1:
+        if self.index > 0:
             self.index -= 1
 
-    def has_quality(self, quality):
-        has_flag = False
-        for torrent in self.movies[self.index]['torrents']:
-            if torrent['quality'] == quality:
-                has_flag = True
-                break
-        return has_flag
+    async def select(self):
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{self.movies[self.index]['link']}") as response:
+                response = await response.text()
+                soup = BeautifulSoup(response, 'html.parser')
+                script = soup.find('div', id='app').find('script').string
+                i = find(script, 'id_movie: ', ',')
+                self.movies[self.index]['id'] = i
 
-    def set_quality(self, quality):
-        self.quality = quality
+    def get_id(self):
+        return self.movies[self.index]['id']
 
-    def get_quality(self):
-        return self.quality
+    def year(self):
+        return self.movies[self.index]['year']
 
     def get_uri(self):
         for torrent in self.movies[self.index]['torrents']:
             if torrent['quality'] == self.quality or self.quality == 'All':
                 return f"magnet:?xt=urn:btih:{torrent['hash']}"
 
-    def imdb_title(self):
-        return self.movies[self.index]['imdb_code']
+    async def imdb_title(self):
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://sg.media-imdb.com/suggests/{self.title()[0].lower()}/{self.title()}.json")\
+                    as res:
+                res = await res.text()
+                res = res.split("(", 1)[1].split(")")[0]
+                res = json.loads(res)
+                if 'd' in res:
+                    for result in res['d']:
+                        year = self.year()
+                        if 'y' in result and result['y'] == int(year):
+                            return result['id']
+                return ''
 
     def count(self):
         return len(self.movies)
@@ -62,21 +103,12 @@ class MovieList(AsyncClass):
     def title(self):
         return self.movies[self.index]['title']
 
-
     def format_embed(self):
         icon = 'https://cdn.discordapp.com/icons/718283348681687082/2c5557b3a168a323771a3798303a3b93.webp?size=128'
         movie = self.movies[self.index]
-        embed = discord.Embed(title=movie['title_long'],
-                              description=textwrap.shorten(movie['summary'],
-                                                           width=200,
-                                                           placeholder=f"... [(read more)](http://www.imdb.com/title"
-                                                                       f"/{movie['imdb_code']})"), color=7950900)
+        embed = discord.Embed(title=f"{movie['title']} ({movie['year']})", color=7950900)
         embed.set_author(name='Excelobot', url='https://github.com/maramizo/excelobot', icon_url=icon)
-        embed.set_footer(text="Made with ❤️", icon_url=icon)
-        embed.set_image(url=movie['medium_cover_image'])
-        embed.add_field(name="IMDb Rating", value=movie['rating'])
-        embed.add_field(name="YouTube Trailer", value=f"[Watch](https://youtube.com/watch?v={movie['yt_trailer_code']})")
-        embed.add_field(name="Duration", value=f"{movie['runtime']} minutes")
+        embed.set_footer(text="Made with ❤️| STILL IN BETA", icon_url=icon)
+        embed.set_image(url=movie['img'])
+        embed.add_field(name="IMDb Rating", value=movie['rate'])
         return embed
-
-
