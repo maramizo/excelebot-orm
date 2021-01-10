@@ -6,7 +6,7 @@
 #  Listen to new messages.
 from datetime import datetime, timezone, timedelta
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import re
 from app.models import Guild, User, Message, Channel, Points
 
@@ -22,9 +22,19 @@ class Messages(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.loaded = False
+        if bot.is_ready():
+            self.reset_dailies.start()
+
+    def cog_unload(self):
+        self.reset_dailies.cancel()
+
+    @tasks.loop(hours=24)
+    async def reset_dailies(self):
+        await Points.all().update(daily=0)
 
     @commands.Cog.listener()
     async def on_ready(self):
+        self.reset_dailies.start()
         if self.loaded is False:
             for guild in self.bot.guilds:
                 db_guild = await Guild.filter(id=guild.id).first()
@@ -59,11 +69,12 @@ class Messages(commands.Cog):
                                  channel_id=message.channel.id, created_at=message.created_at)
             points = await Points.filter(user_id=message.author.id, guild_id=message.guild.id).first()
             if not points:
-                await Points.create(user_id=message.author.id, guild_id=message.guild.id, amount=1)
+                await Points.create(user_id=message.author.id, guild_id=message.guild.id, amount=1, daily=1)
             else:
                 date_diff = datetime.now(timezone.utc) - points.last_updated
-                if date_diff.seconds > 120:
-                    await Points(id=points.id, amount=(points.amount+1)).save(update_fields=['amount', 'last_updated'])
+                if date_diff.seconds > 120 and points.daily < 60:
+                    await Points(id=points.id, amount=(points.amount+1), daily=(points.daily+1))\
+                        .save(update_fields=['amount', 'daily', 'last_updated'])
                     print(f'Adding a point to {message.author}, they now have {points.amount + 1} points.')
 
     async def load_messages_for_channel(self, channel, older_than=None, times_called=1, limit=50):

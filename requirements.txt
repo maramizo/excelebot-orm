@@ -1,4 +1,5 @@
 aiohttp~=3.6.3
 tortoise~=0.1.1
 python-dotenv~=0.15.0
-discord.py==1.5.1
+bs4~=0.0.1
+beautifulsoup4~=4.9.3

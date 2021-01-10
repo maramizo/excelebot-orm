@@ -6,12 +6,19 @@ class Guild(Model):
     id = fields.TextField(pk=True)
     name = fields.TextField()
     prefix = fields.TextField(default='.')
-    points = fields.IntField(null=True)
-    role = fields.TextField(null=True)
     decay = fields.IntField(default=1)
 
     def __str__(self):
         return self.name
+
+
+class GuildRole(Model):
+    id = fields.TextField(pk=True)
+    guild = fields.ForeignKeyField('models.Guild')
+    points = fields.IntField(default=50)
+
+    def __str__(self):
+        return self.id
 
 
 class Channel(Model):
@@ -37,6 +44,7 @@ class Points(Model):
     guild = fields.ForeignKeyField('models.Guild')
     amount = fields.IntField(default=0)
     last_updated = fields.DatetimeField(auto_now=True)
+    daily = fields.IntField(default=0)
 
     def __str__(self):
         return str(self.amount)
